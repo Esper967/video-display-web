@@ -3,3 +3,20 @@
 Thumbs.db
 desktop.ini
 *.log
+
+# 视频
+*.mp4
+*.webm
+*.ogv
+*.mov
+*.m4v
+
+# 音频
+*.mp3
+*.wav
+*.ogg
+*.oga
+*.m4a
+*.aac
+*.flac
+*.opus

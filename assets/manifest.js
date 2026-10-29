@@ -4,7 +4,7 @@
  */
 window.FRAME_ASSETS = {
     "generatedBy":  "tools/scan-assets.ps1",
-    "scannedAt":  "2026-10-29T22:31:36+08:00",
+    "scannedAt":  "2026-10-29T22:45:12+08:00",
     "video":  "assets/bg-video.mp4",
     "audio":  "assets/bgm.mp3",
     "videoName":  "bg-video.mp4",
