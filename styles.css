@@ -1,0 +1,456 @@
+/* =========================================================
+   T-MINUS — 2026.11.01 12:00
+   背景视频 + 同步音频 + 极简倒计时
+   ========================================================= */
+
+:root {
+  --ink: #eef3f7;
+  --dim: rgba(238, 243, 247, 0.52);
+  --faint: rgba(238, 243, 247, 0.3);
+  --line: rgba(238, 243, 247, 0.14);
+  --accent: #9fdcff;
+  --accent-glow: rgba(159, 220, 255, 0.45);
+  --bg: #05080b;
+
+  --num: "Bahnschrift", "DIN Alternate", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --cn: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+
+  --pad: clamp(24px, 4.4vw, 64px);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--cn);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+::selection { background: rgba(159, 220, 255, 0.25); }
+
+/* ============ 背景视频 ============ */
+
+.bg-parallax {
+  position: fixed;
+  inset: -4%;
+  z-index: 0;
+  will-change: transform;
+  transition: transform 1.4s var(--ease);
+  transform: translate3d(0, 0, 0);
+}
+
+.bg-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: brightness(0.62) saturate(0.86) contrast(1.06);
+  animation: drift 52s ease-in-out infinite alternate;
+  background: #05080b;
+}
+
+@keyframes drift {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to   { transform: scale(1.09) translate3d(-1.2%, -0.9%, 0); }
+}
+
+/* ============ 氛围层 ============ */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(62% 46% at 50% 50%, rgba(3, 6, 9, 0.55) 0%, rgba(3, 6, 9, 0.12) 62%, transparent 100%),
+    radial-gradient(125% 88% at 50% 44%, rgba(4, 7, 10, 0.05) 0%, rgba(4, 7, 10, 0.32) 44%, rgba(4, 7, 10, 0.74) 76%, rgba(4, 7, 10, 0.93) 100%),
+    linear-gradient(180deg, rgba(4, 7, 10, 0.82) 0%, rgba(4, 7, 10, 0.22) 24%, rgba(4, 7, 10, 0.18) 52%, rgba(4, 7, 10, 0.58) 80%, rgba(4, 7, 10, 0.94) 100%);
+}
+
+.tint {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.75;
+  mix-blend-mode: screen;
+  background:
+    linear-gradient(133deg, rgba(120, 185, 255, 0.1) 0%, transparent 44%),
+    linear-gradient(316deg, rgba(255, 196, 148, 0.06) 0%, transparent 38%);
+}
+
+.grain {
+  position: fixed;
+  inset: -20%;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  animation: grainShift 7s steps(7) infinite;
+}
+
+@keyframes grainShift {
+  0%   { transform: translate3d(0, 0, 0); }
+  20%  { transform: translate3d(-3%, 2%, 0); }
+  40%  { transform: translate3d(2%, -3%, 0); }
+  60%  { transform: translate3d(-2%, -2%, 0); }
+  80%  { transform: translate3d(3%, 1%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* ============ 主布局 ============ */
+
+.hud {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding:
+    max(var(--pad), env(safe-area-inset-top))
+    max(var(--pad), env(safe-area-inset-right))
+    max(var(--pad), env(safe-area-inset-bottom))
+    max(var(--pad), env(safe-area-inset-left));
+}
+
+/* ---- 中央 ---- */
+
+.core {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transform: translate3d(var(--px, 0px), var(--py, 0px), 0);
+  transition: transform 0.8s var(--ease);
+  will-change: transform;
+  padding-bottom: 1.5vh;
+}
+
+.core > * { animation: rise 1.1s var(--ease) both; }
+.core > :nth-child(1) { animation-delay: 0.15s; }
+
+/* 倒计时本身需要保留 transform 给拖拽使用，入场只做淡入 */
+.core > .clock {
+  animation-name: clockIn;
+  animation-delay: 0.28s;
+}
+
+@keyframes clockIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(20px); filter: blur(7px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+/* ---- 眉标 ---- */
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 2vw, 28px);
+}
+
+.eyebrow__rule {
+  width: clamp(26px, 4.6vw, 68px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(238, 243, 247, 0.18) 40%, rgba(159, 220, 255, 0.5) 100%);
+}
+
+.eyebrow__rule:last-of-type {
+  transform: scaleX(-1);
+}
+
+.eyebrow__text {
+  font-size: clamp(11px, 1.05vw, 13.5px);
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* ---- 倒计时 ---- */
+
+.clock {
+  --value-size: clamp(68px, 13vw, 208px);
+  --drag-x: 0px;
+  --drag-y: 0px;
+  --drag-r: 0deg;
+  --drag-s: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin-top: clamp(28px, 3.8vw, 52px);
+  position: relative;
+  z-index: 0;
+  transform: translate3d(var(--drag-x), var(--drag-y), 0) rotate(var(--drag-r)) scale(var(--drag-s));
+  will-change: transform;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body.is-dragging .clock {
+  cursor: grabbing;
+}
+
+.clock::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 46%;
+  left: 50%;
+  width: 116%;
+  height: 148%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  filter: blur(26px);
+  background: radial-gradient(50% 50% at 50% 50%, rgba(3, 6, 9, 0.62) 0%, rgba(3, 6, 9, 0.3) 46%, transparent 74%);
+}
+
+.unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.value {
+  display: block;
+  min-width: 2ch;
+  text-align: center;
+  font-family: var(--num);
+  font-size: var(--value-size);
+  font-weight: 300;
+  line-height: 0.82;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  color: transparent;
+  background: linear-gradient(172deg, #ffffff 6%, #e3edf4 44%, #a9bcc9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter:
+    drop-shadow(0 0 30px rgba(180, 220, 255, 0.16))
+    drop-shadow(0 12px 34px rgba(0, 0, 0, 0.45));
+}
+
+.value.flip {
+  animation: flipIn 0.7s var(--ease);
+}
+
+@keyframes flipIn {
+  from { opacity: 0.35; transform: translateY(0.1em); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sep {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex: none;
+  height: calc(var(--value-size) * 0.82);
+  gap: clamp(10px, 1.15vw, 16px);
+  margin: 0 clamp(8px, 1.9vw, 30px);
+}
+
+.sep i {
+  display: block;
+  width: clamp(5px, 0.45vw, 7px);
+  height: clamp(5px, 0.45vw, 7px);
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.8;
+  box-shadow: 0 0 10px rgba(159, 220, 255, 0.75), 0 0 26px rgba(159, 220, 255, 0.35);
+  animation: sepGlow 7s ease-in-out infinite;
+}
+
+.sep i:last-child { animation-delay: 0.35s; }
+
+@keyframes sepGlow {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.95; }
+}
+
+/* ---- 到点之后 ---- */
+
+body.is-ended .value {
+  background: linear-gradient(172deg, #ffffff 4%, #d6eeff 46%, #83c6ea 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter:
+    drop-shadow(0 0 36px rgba(159, 220, 255, 0.35))
+    drop-shadow(0 12px 34px rgba(0, 0, 0, 0.45));
+}
+
+body.is-ended .sep i {
+  opacity: 1;
+  animation-duration: 4s;
+}
+
+body.is-ended .eyebrow__text {
+  color: rgba(159, 220, 255, 0.9);
+}
+
+body.is-ended .clock {
+  animation: endPulse 2.8s ease-out both;
+}
+
+@keyframes endPulse {
+  0%   { filter: brightness(1); }
+  15%  { filter: brightness(1.5); }
+  100% { filter: brightness(1); }
+}
+
+/* ---- 进入层（独立页面，不含视频与倒计时） ---- */
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(120% 85% at 50% 44%, #0a1219 0%, #070c11 42%, #04070a 78%, #030507 100%);
+  cursor: pointer;
+  transition: opacity 1.2s var(--ease), visibility 1.2s;
+}
+
+.gate::before {
+  content: "";
+  position: absolute;
+  width: min(62vmin, 640px);
+  height: min(62vmin, 640px);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(159, 220, 255, 0.09) 0%, rgba(159, 220, 255, 0.025) 44%, transparent 70%);
+  animation: gateGlow 8s ease-in-out infinite;
+}
+
+.gate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+@keyframes gateGlow {
+  0%, 100% { opacity: 0.4; transform: scale(0.94); }
+  50%      { opacity: 1;   transform: scale(1.06); }
+}
+
+.gate.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.gate:focus { outline: none; }
+
+.gate__enter {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(14px, 1.3vw, 17px);
+  letter-spacing: 0.52em;
+  text-indent: 0.52em;
+  color: rgba(238, 243, 247, 0.7);
+  white-space: nowrap;
+  text-shadow: 0 0 34px rgba(159, 220, 255, 0.18);
+  animation: gateBreathe 5.4s ease-in-out infinite;
+  transition: color 0.7s var(--ease), text-shadow 0.7s var(--ease);
+}
+
+.gate:hover .gate__enter,
+.gate:focus-visible .gate__enter {
+  color: #ffffff;
+  text-shadow: 0 0 28px rgba(159, 220, 255, 0.55);
+}
+
+@keyframes gateBreathe {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.94; }
+}
+
+/* 进入前隐藏主界面 */
+.hud {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 1.2s var(--ease), visibility 1.2s;
+}
+
+body.is-entered .hud {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ---- 兜底 ---- */
+
+.noscript {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: #05080b;
+  color: var(--ink);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
+
+/* ============ 响应式 ============ */
+
+@media (max-width: 780px) {
+  :root { --pad: clamp(20px, 5.5vw, 30px); }
+
+  .clock { --value-size: clamp(54px, 18vw, 118px); }
+  .sep { margin: 0 5px; gap: 8px; }
+  .sep i { width: 4.5px; height: 4.5px; }
+
+  .eyebrow__rule { width: 22px; }
+  .eyebrow__text { font-size: 10px; letter-spacing: 0.12em; text-indent: 0.12em; }
+
+  .gate__enter { font-size: 14px; letter-spacing: 0.42em; text-indent: 0.42em; }
+}
+
+@media (max-height: 620px) {
+  .clock { --value-size: clamp(48px, 9.5vw, 120px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
