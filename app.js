@@ -1,101 +1,240 @@
-
+/*
+ * 可拓展前端框架 · 交互逻辑
+ * ------------------------------------------------------------
+ * 纯音画页面：素材地址由 assets/manifest.js 提供。
+ * 进入层会等待视频与音频都加载到可播放状态后才开放。
+ */
 (function () {
   "use strict";
 
-  var TARGET = new Date("2026-11-01T12:00:00+08:00");
-  var TARGET_PRESSED = TARGET.getTime();
+  var DEFAULTS = {
+    enterText: "点击进入",
+    targetVolume: 0.45,
+    fadeDuration: 3000,
+    fadeDelay: 120,
+    mediaErrorTitle: "素材未就绪",
+    mediaErrorText: "请把 1 个视频和 1 个音频放入 assets 文件夹，然后双击“启动网页.bat”。",
+    mediaErrorHint: "支持 MP4 / WebM / OGV / MOV / M4V 与 MP3 / WAV / OGG / M4A / AAC / FLAC / OPUS；除框架自带示例外，视频和音频请各保留一个。"
+  };
+
+  var userConfig = window.FRAME_CONFIG || {};
+  var config = {};
+  Object.keys(DEFAULTS).forEach(function (key) {
+    config[key] = Object.prototype.hasOwnProperty.call(userConfig, key)
+      ? userConfig[key]
+      : DEFAULTS[key];
+  });
+
+  var manifest = window.FRAME_ASSETS || null;
 
   var $ = function (id) { return document.getElementById(id); };
 
-  var daysEl = $("days");
-  var hoursEl = $("hours");
-  var minutesEl = $("minutes");
-  var clockEl = $("clock");
-  var coreEl = $("core");
   var bgEl = $("bgParallax");
-
   var videoEl = $("bgVideo");
   var audioEl = $("bgm");
   var gateEl = $("gate");
+  var gateLoadingEl = $("gateLoading");
+  var loadTrackEl = $("loadTrack");
+  var loadFillEl = $("loadFill");
+  var loadTextEl = $("loadText");
+  var enterLabelEl = $("enterLabel");
+  var mediaErrorTitleEl = $("mediaErrorTitle");
+  var mediaErrorTextEl = $("mediaErrorText");
+  var mediaErrorHintEl = $("mediaErrorHint");
 
-  var pad2 = function (n) { return n < 10 ? "0" + n : String(n); };
-  var eyebrowTextEl = document.querySelector(".eyebrow__text");
-  var expiredShown = false;
-
-
-  var prev = { d: null, h: null, m: null };
-  var firstRender = true;
-
-  function setValue(el, key, value) {
-    if (prev[key] === value) return;
-    var isFirst = prev[key] === null;
-    prev[key] = value;
-    el.textContent = value;
-    if (isFirst) return;
-    el.classList.remove("flip");
-    void el.offsetWidth;
-    el.classList.add("flip");
-  }
-
-  function updateTitle(d, h, m) {
-    document.title = expiredShown
-      ? "活动已开始 "
-      : "塔露拉半周年倒计时";
-  }
-
-  function markEnded() {
-    if (expiredShown) return;
-    expiredShown = true;
-    if (eyebrowTextEl) eyebrowTextEl.textContent = "活动已开始";
-    document.body.classList.add("is-ended");
-  }
-
-  function tick() {
-    var now = Date.now();
-    var diff = TARGET_PRESSED - now;
-    var expired = diff <= 0;
-    if (diff < 0) diff = 0;
-
-    var totalMinutes = Math.floor(diff / 60000);
-    var d = Math.floor(totalMinutes / 1440);
-    var h = Math.floor((totalMinutes % 1440) / 60);
-    var m = totalMinutes % 60;
-
-    if (expired) markEnded();
-
-    setValue(daysEl, "d", pad2(d));
-    setValue(hoursEl, "h", pad2(h));
-    setValue(minutesEl, "m", pad2(m));
-
-    var label = expired
-      ? "活动已经开始"
-      : "距离活动开始还有 " + d + " 天 " + h + " 小时 " + m + " 分钟";
-
-    if (firstRender) {
-      firstRender = false;
-      clockEl.setAttribute("aria-label", label);
-      updateTitle(d, h, m);
-    } else if (prev.reported !== totalMinutes) {
-      clockEl.setAttribute("aria-label", label);
-      updateTitle(d, h, m);
-    }
-    prev.reported = totalMinutes;
-  }
-
-
-  var TARGET_VOLUME = 0.45;
-  var FADE_DURATION = 3000;
-  var FADE_DELAY = 120;
-
+  var mediaFailed = false;
+  var mediaReady = false;
   var entered = false;
   var volumeTimer = null;
+  var progressTimer = null;
+  var lastProgress = -1;
+  var canPlayThrough = { video: false, audio: false };
+
+
+  /* ---------- 提示文案 ---------- */
+
+  function applyCopy() {
+    if (enterLabelEl) enterLabelEl.textContent = config.enterText;
+    if (mediaErrorTitleEl) mediaErrorTitleEl.textContent = config.mediaErrorTitle;
+    if (mediaErrorTextEl) mediaErrorTextEl.textContent = config.mediaErrorText;
+    if (mediaErrorHintEl) mediaErrorHintEl.textContent = config.mediaErrorHint;
+  }
+
+  function showError(title, text, hint) {
+    mediaFailed = true;
+    stopProgressTimer();
+    document.body.classList.add("has-media-error");
+
+    if (title && mediaErrorTitleEl) mediaErrorTitleEl.textContent = title;
+    if (text && mediaErrorTextEl) mediaErrorTextEl.textContent = text;
+    if (hint && mediaErrorHintEl) mediaErrorHintEl.textContent = hint;
+
+    if (!gateEl) return;
+    gateEl.classList.remove("is-hidden");
+    gateEl.classList.remove("is-loading");
+    gateEl.removeAttribute("inert");
+    gateEl.removeAttribute("aria-hidden");
+    gateEl.setAttribute("aria-busy", "false");
+    gateEl.setAttribute("aria-disabled", "true");
+    gateEl.setAttribute("aria-label", title || "素材未就绪");
+    try { gateEl.focus(); } catch (e) {}
+  }
+
+
+  /* ---------- 加载进度 ---------- */
+
+  function setProgress(value) {
+    var pct = Math.max(0, Math.min(100, Math.round(value)));
+    if (pct === lastProgress) return;
+    lastProgress = pct;
+
+    if (loadFillEl) loadFillEl.style.width = pct + "%";
+    if (loadTrackEl) loadTrackEl.setAttribute("aria-valuenow", String(pct));
+    if (loadTextEl) loadTextEl.textContent = "正在加载音画 " + pct + "%";
+  }
+
+  function bufferRatio(el) {
+    if (el.readyState >= 4) return 1;
+
+    var duration = el.duration;
+    if (isFinite(duration) && duration > 0) {
+      try {
+        var buffered = el.buffered;
+        if (buffered && buffered.length) {
+          return Math.max(0, Math.min(1, buffered.end(buffered.length - 1) / duration));
+        }
+      } catch (e) {}
+    }
+
+    if (el.readyState < 1) return 0;
+    return Math.min(0.3, el.readyState / 12);
+  }
+
+  function bufferedToEnd(el) {
+    if (el.readyState < 3) return false;
+    var duration = el.duration;
+    if (!isFinite(duration) || duration <= 0) return false;
+
+    try {
+      var buffered = el.buffered;
+      if (buffered && buffered.length) {
+        return buffered.end(buffered.length - 1) >= duration * 0.995;
+      }
+    } catch (e) {}
+
+    return false;
+  }
+
+  function stopProgressTimer() {
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+  }
+
+  function markMediaReady() {
+    if (mediaReady || mediaFailed) return;
+    mediaReady = true;
+    stopProgressTimer();
+    setProgress(100);
+
+    if (gateLoadingEl) gateLoadingEl.setAttribute("aria-hidden", "true");
+    if (gateEl) {
+      gateEl.classList.remove("is-loading");
+      gateEl.classList.add("is-ready");
+      gateEl.setAttribute("aria-busy", "false");
+      gateEl.removeAttribute("aria-disabled");
+      gateEl.setAttribute("tabindex", "0");
+      gateEl.setAttribute("aria-label", config.enterText);
+      try { gateEl.focus(); } catch (e) {}
+    }
+  }
+
+  function checkMediaReady() {
+    if (mediaReady || mediaFailed) return;
+
+    var videoReady = canPlayThrough.video || videoEl.readyState >= 4 || bufferedToEnd(videoEl);
+    var audioReady = canPlayThrough.audio || audioEl.readyState >= 4 || bufferedToEnd(audioEl);
+
+    if (videoReady && audioReady) markMediaReady();
+  }
+
+  function updateProgress() {
+    if (mediaFailed) return;
+    if (mediaReady) {
+      setProgress(100);
+      return;
+    }
+
+    var ratio = (bufferRatio(videoEl) + bufferRatio(audioEl)) / 2;
+    setProgress(Math.min(96, ratio * 100));
+    checkMediaReady();
+  }
+
+  function startProgressTimer() {
+    stopProgressTimer();
+    progressTimer = setInterval(updateProgress, 250);
+  }
+
+
+  /* ---------- 音画进入与渐入 ---------- */
+
+  function mediaErrorTextFor(kind, file) {
+    var which = kind === "video" ? "视频" : "音频";
+    return "无法读取" + which + "：" + (file || "未知文件") +
+      "。请确认文件未损坏、格式受当前浏览器支持，然后重新运行“启动网页.bat”。";
+  }
+
+  function initMedia() {
+    if (!manifest || !manifest.video || !manifest.audio) {
+      showError(
+        config.mediaErrorTitle,
+        "还没有可用的素材清单。请把 1 个视频和 1 个音频放入 assets，然后双击“启动网页.bat”。",
+        config.mediaErrorHint
+      );
+      return false;
+    }
+
+    function bindProgress(el) {
+      ["progress", "loadedmetadata", "loadeddata", "canplay", "durationchange"].forEach(function (name) {
+        el.addEventListener(name, updateProgress);
+      });
+    }
+
+    bindProgress(videoEl);
+    bindProgress(audioEl);
+
+    videoEl.addEventListener("canplaythrough", function () {
+      canPlayThrough.video = true;
+      updateProgress();
+    });
+    audioEl.addEventListener("canplaythrough", function () {
+      canPlayThrough.audio = true;
+      updateProgress();
+    });
+
+    videoEl.addEventListener("error", function () {
+      showError(config.mediaErrorTitle, mediaErrorTextFor("video", manifest.videoName || manifest.video), config.mediaErrorHint);
+    });
+    audioEl.addEventListener("error", function () {
+      showError(config.mediaErrorTitle, mediaErrorTextFor("audio", manifest.audioName || manifest.audio), config.mediaErrorHint);
+    });
+
+    videoEl.src = manifest.video;
+    audioEl.src = manifest.audio;
+
+    setProgress(0);
+    startProgressTimer();
+    return true;
+  }
 
   function fadeVolume(to, duration) {
     if (volumeTimer) clearInterval(volumeTimer);
     var from = audioEl.volume;
     var startAt = performance.now();
+    var safeDuration = Math.max(1, Number(duration) || 1);
     volumeTimer = setInterval(function () {
-      var t = Math.min(1, (performance.now() - startAt) / duration);
+      var t = Math.min(1, (performance.now() - startAt) / safeDuration);
       var eased = 1 - Math.pow(1 - t, 3);
       audioEl.volume = Math.min(1, Math.max(0, from + (to - from) * eased));
       if (t >= 1) {
@@ -106,7 +245,7 @@
   }
 
   function startPlayback() {
-    if (entered) return;
+    if (entered || mediaFailed || !mediaReady) return;
     entered = true;
 
     try { videoEl.currentTime = 0; } catch (e) {}
@@ -117,22 +256,25 @@
     var audioPromise = audioEl.play();
 
     if (videoPromise && typeof videoPromise.catch === "function") {
-      videoPromise.catch(function () {});
+      videoPromise.catch(function () {
+        if (videoEl.error) {
+          showError(config.mediaErrorTitle, mediaErrorTextFor("video", manifest.videoName || manifest.video), config.mediaErrorHint);
+        }
+      });
     }
 
     if (audioPromise && typeof audioPromise.then === "function") {
       audioPromise.then(function () {
         setTimeout(function () {
-          fadeVolume(TARGET_VOLUME, FADE_DURATION);
-        }, FADE_DELAY);
+          fadeVolume(config.targetVolume, config.fadeDuration);
+        }, config.fadeDelay);
       }).catch(function () {});
     } else {
       setTimeout(function () {
-        fadeVolume(TARGET_VOLUME, FADE_DURATION);
-      }, FADE_DELAY);
+        fadeVolume(config.targetVolume, config.fadeDuration);
+      }, config.fadeDelay);
     }
 
-    document.body.classList.add("is-entered");
     if (gateEl) {
       gateEl.classList.add("is-hidden");
       gateEl.setAttribute("aria-hidden", "true");
@@ -140,6 +282,16 @@
       if (gateEl.blur) gateEl.blur();
     }
   }
+
+
+  /* ---------- 启动 ---------- */
+
+  applyCopy();
+
+  videoEl.muted = true;
+  videoEl.volume = 0;
+
+  var mediaAvailable = initMedia();
 
   if (gateEl) {
     gateEl.addEventListener("click", startPlayback);
@@ -151,30 +303,23 @@
     });
   }
 
-
-  videoEl.muted = true;
-  videoEl.volume = 0;
-
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) {
-      if (entered && videoEl.paused) {
-        var p = videoEl.play();
-        if (p && typeof p.catch === "function") p.catch(function () {});
-      }
-      tick();
+    if (!document.hidden && mediaAvailable && entered && videoEl.paused && !mediaFailed) {
+      var p = videoEl.play();
+      if (p && typeof p.catch === "function") p.catch(function () {});
     }
   });
 
 
+  /* ---------- 鼠标视差 ---------- */
+
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  if (!reduceMotion && bgEl && coreEl) {
+  if (!reduceMotion && bgEl) {
     var mx = 0, my = 0, rafId = 0;
 
     function apply() {
       rafId = 0;
-      coreEl.style.setProperty("--px", (mx * 9).toFixed(2) + "px");
-      coreEl.style.setProperty("--py", (my * 7).toFixed(2) + "px");
       bgEl.style.transform =
         "translate3d(" + (-mx * 16).toFixed(2) + "px," + (-my * 12).toFixed(2) + "px,0)";
     }
@@ -185,106 +330,4 @@
       if (!rafId) rafId = requestAnimationFrame(apply);
     }, { passive: true });
   }
-
-
-  var DRAG_LIMIT_X = 52;
-  var DRAG_LIMIT_Y = 74;
-  var drag = { x: 0, y: 0, vx: 0, vy: 0, active: false, raf: 0, id: null, sx: 0, sy: 0, bx: 0, by: 0 };
-
-  function clamp(v, min, max) {
-    return v < min ? min : (v > max ? max : v);
-  }
-
-  function applyDrag() {
-    var scale = 1 - Math.min(0.035, Math.abs(drag.y) / 2200);
-    clockEl.style.setProperty("--drag-x", drag.x.toFixed(2) + "px");
-    clockEl.style.setProperty("--drag-y", drag.y.toFixed(2) + "px");
-    clockEl.style.setProperty("--drag-r", (drag.x * 0.035).toFixed(2) + "deg");
-    clockEl.style.setProperty("--drag-s", scale.toFixed(4));
-  }
-
-  function dragLoop() {
-    drag.raf = 0;
-    if (!drag.active) {
-      drag.vx += -drag.x * 0.09;
-      drag.vy += -drag.y * 0.09;
-      drag.vx *= 0.84;
-      drag.vy *= 0.84;
-      drag.x = clamp(drag.x + drag.vx, -DRAG_LIMIT_X, DRAG_LIMIT_X);
-      drag.y = clamp(drag.y + drag.vy, -DRAG_LIMIT_Y, DRAG_LIMIT_Y);
-      if (Math.abs(drag.x) < 0.06 && Math.abs(drag.y) < 0.06 &&
-          Math.abs(drag.vx) < 0.06 && Math.abs(drag.vy) < 0.06) {
-        drag.x = 0;
-        drag.y = 0;
-        drag.vx = 0;
-        drag.vy = 0;
-        applyDrag();
-        return;
-      }
-    }
-    applyDrag();
-    drag.raf = requestAnimationFrame(dragLoop);
-  }
-
-  function kickDrag() {
-    if (!drag.raf) drag.raf = requestAnimationFrame(dragLoop);
-  }
-
-  window.addEventListener("wheel", function (event) {
-    if (!entered || reduceMotion || event.ctrlKey) return;
-    var unit = event.deltaMode === 1 ? 16 : (event.deltaMode === 2 ? 100 : 1);
-    drag.y = clamp(drag.y + event.deltaY * unit * 0.32, -DRAG_LIMIT_Y, DRAG_LIMIT_Y);
-    drag.x = clamp(drag.x + event.deltaX * unit * 0.32, -DRAG_LIMIT_X, DRAG_LIMIT_X);
-    applyDrag();
-    kickDrag();
-  }, { passive: true });
-
-  if (clockEl) {
-    clockEl.addEventListener("pointerdown", function (event) {
-      if (!entered || reduceMotion) return;
-      if (event.pointerType === "mouse" && event.button !== 0) return;
-      drag.active = true;
-      drag.id = event.pointerId;
-      drag.sx = event.clientX;
-      drag.sy = event.clientY;
-      drag.bx = drag.x;
-      drag.by = drag.y;
-      drag.vx = 0;
-      drag.vy = 0;
-      document.body.classList.add("is-dragging");
-      if (clockEl.setPointerCapture) {
-        try { clockEl.setPointerCapture(event.pointerId); } catch (e) {}
-      }
-      kickDrag();
-    });
-
-    clockEl.addEventListener("pointermove", function (event) {
-      if (!drag.active || event.pointerId !== drag.id) return;
-      var dx = event.clientX - drag.sx;
-      var dy = event.clientY - drag.sy;
-      drag.x = clamp(drag.bx + dx * 0.9, -DRAG_LIMIT_X, DRAG_LIMIT_X);
-      drag.y = clamp(drag.by + dy * 0.75, -DRAG_LIMIT_Y, DRAG_LIMIT_Y);
-      applyDrag();
-    });
-
-    function releaseDrag() {
-      if (!drag.active) return;
-      drag.active = false;
-      document.body.classList.remove("is-dragging");
-      drag.vx = 0;
-      drag.vy = 0;
-      kickDrag();
-    }
-
-    clockEl.addEventListener("pointerup", releaseDrag);
-    clockEl.addEventListener("pointercancel", releaseDrag);
-    clockEl.addEventListener("lostpointercapture", releaseDrag);
-  }
-
-
-  tick();
-
-  setInterval(function () {
-    tick();
-  }, 1000);
 })();
