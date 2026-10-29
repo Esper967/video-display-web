@@ -4,7 +4,7 @@
  */
 window.FRAME_ASSETS = {
     "generatedBy":  "tools/scan-assets.ps1",
-    "scannedAt":  "2026-10-30T00:22:21+08:00",
+    "scannedAt":  "2026-10-30T00:34:28+08:00",
     "video":  "assets/新宿决战.mp4",
     "audio":  "assets/雨爱dj.mp3",
     "videoName":  "新宿决战.mp4",
