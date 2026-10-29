@@ -1,7 +1,3 @@
-/* =========================================================
-   T-MINUS — 交互与倒计时逻辑
-   目标：2026-11-01 12:00 (UTC+8)
-   ========================================================= */
 
 (function () {
   "use strict";
@@ -26,7 +22,6 @@
   var eyebrowTextEl = document.querySelector(".eyebrow__text");
   var expiredShown = false;
 
-  /* ---------------- 倒计时 ---------------- */
 
   var prev = { d: null, h: null, m: null };
   var firstRender = true;
@@ -44,8 +39,8 @@
 
   function updateTitle(d, h, m) {
     document.title = expiredShown
-      ? "活动已开始 · 时间啊，向前！"
-      : "T-" + d + "D " + h + "H " + m + "M · 时间啊，向前！";
+      ? "活动已开始 "
+      : "塔露拉半周年倒计时";
   }
 
   function markEnded() {
@@ -87,10 +82,6 @@
     prev.reported = totalMinutes;
   }
 
-  /* ---------------- 进入层 & 音画同步 ----------------
-     进入层只有一行文字，点击页面任意位置即进入。
-     进入时在同一个手势里让视频与音频都从 0 开始播放，
-     随后音乐音量从 0 渐入到 TARGET_VOLUME（偏轻，不抢系统音量）。 */
 
   var TARGET_VOLUME = 0.45;
   var FADE_DURATION = 3000;
@@ -118,7 +109,6 @@
     if (entered) return;
     entered = true;
 
-    /* 音画归零后在同一帧起播，保证同步 */
     try { videoEl.currentTime = 0; } catch (e) {}
     try { audioEl.currentTime = 0; } catch (e) {}
     audioEl.volume = 0;
@@ -151,7 +141,6 @@
     }
   }
 
-  /* 点击任意处进入（整个进入层就是点击区域），键盘回车/空格同样有效 */
   if (gateEl) {
     gateEl.addEventListener("click", startPlayback);
     gateEl.addEventListener("keydown", function (event) {
@@ -162,7 +151,6 @@
     });
   }
 
-  /* ---------------- 视频 ---------------- */
 
   videoEl.muted = true;
   videoEl.volume = 0;
@@ -177,7 +165,6 @@
     }
   });
 
-  /* ---------------- 鼠标视差 ---------------- */
 
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -199,9 +186,6 @@
     }, { passive: true });
   }
 
-  /* ---------------- 滚轮 / 拖拽互动 ----------------
-     滚轮或手指拖动时，倒计时被「拉走」并带回弹，
-     松手后以弹簧缓动归位。进入前不响应。 */
 
   var DRAG_LIMIT_X = 52;
   var DRAG_LIMIT_Y = 74;
@@ -297,7 +281,6 @@
     clockEl.addEventListener("lostpointercapture", releaseDrag);
   }
 
-  /* ---------------- 启动 ---------------- */
 
   tick();
 

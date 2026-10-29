@@ -1,7 +1,4 @@
-/* =========================================================
-   T-MINUS — 2026.11.01 12:00
-   背景视频 + 同步音频 + 极简倒计时
-   ========================================================= */
+
 
 :root {
   --ink: #eef3f7;
@@ -45,7 +42,6 @@ body {
 
 ::selection { background: rgba(159, 220, 255, 0.25); }
 
-/* ============ 背景视频 ============ */
 
 .bg-parallax {
   position: fixed;
@@ -72,7 +68,6 @@ body {
   to   { transform: scale(1.09) translate3d(-1.2%, -0.9%, 0); }
 }
 
-/* ============ 氛围层 ============ */
 
 .scrim {
   position: fixed;
@@ -118,7 +113,6 @@ body {
   100% { transform: translate3d(0, 0, 0); }
 }
 
-/* ============ 主布局 ============ */
 
 .hud {
   position: fixed;
@@ -133,7 +127,6 @@ body {
     max(var(--pad), env(safe-area-inset-left));
 }
 
-/* ---- 中央 ---- */
 
 .core {
   display: flex;
@@ -150,7 +143,6 @@ body {
 .core > * { animation: rise 1.1s var(--ease) both; }
 .core > :nth-child(1) { animation-delay: 0.15s; }
 
-/* 倒计时本身需要保留 transform 给拖拽使用，入场只做淡入 */
 .core > .clock {
   animation-name: clockIn;
   animation-delay: 0.28s;
@@ -166,7 +158,6 @@ body {
   to   { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
-/* ---- 眉标 ---- */
 
 .eyebrow {
   display: flex;
@@ -192,7 +183,6 @@ body {
   white-space: nowrap;
 }
 
-/* ---- 倒计时 ---- */
 
 .clock {
   --value-size: clamp(68px, 13vw, 208px);
@@ -296,7 +286,6 @@ body.is-dragging .clock {
   50%      { opacity: 0.95; }
 }
 
-/* ---- 到点之后 ---- */
 
 body.is-ended .value {
   background: linear-gradient(172deg, #ffffff 4%, #d6eeff 46%, #83c6ea 100%);
@@ -327,7 +316,6 @@ body.is-ended .clock {
   100% { filter: brightness(1); }
 }
 
-/* ---- 进入层（独立页面，不含视频与倒计时） ---- */
 
 .gate {
   position: fixed;
@@ -400,7 +388,6 @@ body.is-ended .clock {
   50%      { opacity: 0.94; }
 }
 
-/* 进入前隐藏主界面 */
 .hud {
   opacity: 0;
   visibility: hidden;
@@ -412,7 +399,6 @@ body.is-entered .hud {
   visibility: visible;
 }
 
-/* ---- 兜底 ---- */
 
 .noscript {
   position: fixed;
@@ -426,7 +412,6 @@ body.is-entered .hud {
   letter-spacing: 0.1em;
 }
 
-/* ============ 响应式 ============ */
 
 @media (max-width: 780px) {
   :root { --pad: clamp(20px, 5.5vw, 30px); }
