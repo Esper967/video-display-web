@@ -13,8 +13,7 @@
     fadeDuration: 3000,
     fadeDelay: 120,
     mediaErrorTitle: "素材未就绪",
-    mediaErrorText: "请把 1 个视频和 1 个音频放入 assets 文件夹，然后双击“启动网页.bat”。",
-    mediaErrorHint: "支持 MP4 / WebM / OGV / MOV / M4V 与 MP3 / WAV / OGG / M4A / AAC / FLAC / OPUS；除框架自带示例外，视频和音频请各保留一个。"
+    mediaErrorText: "请把 1 个视频和 1 个音频放入 assets 文件夹，然后双击“启动网页.bat”。"
   };
 
   var userConfig = window.FRAME_CONFIG || {};
